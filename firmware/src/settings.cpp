@@ -106,7 +106,7 @@ static void build(sets::Builder& b) {
         } else {
             b.Label("time_rtc_"_h, "Внутреннее время", time_rtc.gettime("H:i:s"));
             Serial.println(time_rtc.gettime("H:i:s"));
-            b.Input(time_rtc.settime(1,1,1,1,1,1,1), "Ввод");
+            //b.Input(time_rtc.settime(1,1,1,1,1,1,1), "Ввод");
         }
     }
     //{
