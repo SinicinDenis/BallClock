@@ -3,10 +3,15 @@
 #include <Looper.h>
 #include <RunningGFX.h>
 #include <WiFiConnector.h>
+#include <Wire.h>
+#include <iarduino_RTC.h>
+ 
 
+iarduino_RTC time_rtc(RTC_DS1302, 25, 27, 26);
 #include "config.h"
 #include "matrix.h"
 #include "settings.h"
+
 
 void runString(String str) {
     RunningGFX run(matrix);
@@ -20,7 +25,7 @@ void runString(String str) {
     run.start();
 
     while (run.tick() != RG_FINISH) {
-        delay(0);
+        delay(1);
         yield();
     }
 }
@@ -30,7 +35,12 @@ void setup() {
     Serial.println("\n" PROJECT_NAME " v" PROJECT_VER);
 
     matrix.begin();
-
+    
+    
+    time_rtc.begin();
+    //time_rtc.settime(1,1,1,1,1,1);
+    
+    
     WiFiConnector.setName(PROJECT_NAME);
 
     WiFiConnector.onConnect([]() {
@@ -51,6 +61,10 @@ void setup() {
     });
 }
 
+
+
 void loop() {
+    
     Looper.loop();
+    
 }

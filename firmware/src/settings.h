@@ -34,6 +34,10 @@ DB_KEYS(
     back_speed,
     back_angle,
     back_scale,
-    back_bright
-
+    back_bright,
+    slider_,
+    time_ntp,
+    time_rtc_,
+    wifi_setup,
+    fon_setup
 );

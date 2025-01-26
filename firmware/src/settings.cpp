@@ -5,14 +5,20 @@
 #include <Looper.h>
 #include <SettingsESP.h>
 #include <WiFiConnector.h>
+#include <iarduino_RTC.h>
 
 #include "config.h"
 #include "palettes.h"
 #include "redraw.h"
 
+
+
+extern iarduino_RTC time_rtc;
+
 AutoOTA ota(PROJECT_VER, PROJECT_URL);
 
 GyverDBFile db(&LittleFS, "/data.db");
+
 static SettingsESP sett(PROJECT_NAME " v" PROJECT_VER, &db);
 
 static void update(sets::Updater& u) {
@@ -27,6 +33,8 @@ static void update(sets::Updater& u) {
 
     u.update("local_time"_h, NTP.timeToString());
     u.update("synced"_h, NTP.synced());
+    
+    Serial.println("------------------->");
     if (ota.hasUpdate()) u.update("ota_update"_h, F("Доступно обновление. Обновить прошивку?"));
 
     Looper.getTimer("redraw")->restart(100);
@@ -41,23 +49,27 @@ static void build(sets::Builder& b) {
     }
     {
         sets::Group g(b, "Фон");
+        if (b.Switch(kk::fon_setup, "Фон ⚙️")) b.reload();
 
-        if (b.Select(kk::back_mode, "Фон", "Нет;Градиент;Перлин")) b.reload();
+        if (db[kk::fon_setup]) {
 
-        if (db[kk::back_mode].toInt()) {
-            b.Select(kk::back_pal, "Палитра", getPaletteList());
-            b.Slider(kk::back_bright, "Яркость", 0, 255);
-            b.Slider(kk::back_speed, "Скорость");
-            b.Slider(kk::back_scale, "Масштаб");
-            b.Slider(kk::back_angle, "Угол", -180, 180);
+            if (b.Select(kk::back_mode, "Фон", "Нет;Градиент;Перлин")) b.reload();
+
+            if (db[kk::back_mode].toInt()) {
+                b.Select(kk::back_pal, "Палитра", getPaletteList());
+                b.Slider(kk::back_bright, "Яркость", 0, 255);
+                b.Slider(kk::back_speed, "Скорость");
+                b.Slider(kk::back_scale, "Масштаб");
+                b.Slider(kk::back_angle, "Угол", -180, 180);
+            }
         }
     }
     {
         sets::Group g(b, "Яркость");
         if (b.Switch(kk::auto_bright, "Автояркость")) b.reload();
-        b.Label("adc_val"_h, "Сигнал с датчика");
 
         if (db[kk::auto_bright]) {
+            b.Label("adc_val"_h, "Сигнал с датчика");
             b.Slider(kk::bright_min, "Мин.", 0, 255);
             b.Slider(kk::bright_max, "Макс.", 0, 255);
 
@@ -82,22 +94,45 @@ static void build(sets::Builder& b) {
     }
     {
         sets::Group g(b, "Время");
+        if (b.Switch(kk::time_ntp, "Время из интернета")) b.reload();
+        //b.Label("adc_val"_h, "Сигнал с датчика");
 
-        b.Input(kk::ntp_gmt, "Часовой пояс");
-        b.Input(kk::ntp_host, "NTP сервер");
-        b.LED("synced"_h, "Синхронизирован", NTP.synced());
-        b.Label("local_time"_h, "Локальное время", NTP.timeToString());
+        if (db[kk::time_ntp]) {
+            
+            b.Input(kk::ntp_gmt, "Часовой пояс");
+            b.Input(kk::ntp_host, "NTP сервер");
+            b.LED("synced"_h, "Синхронизирован", NTP.synced());
+            b.Label("local_time"_h, "Локальное время", NTP.timeToString());
+        } else {
+            b.Label("time_rtc_"_h, "Внутреннее время", time_rtc.gettime("H:i:s"));
+            Serial.println(time_rtc.gettime("H:i:s"));
+            b.Input(time_rtc.settime(1,1,1,1,1,1,1), "Ввод");
+        }
     }
+    //{
+    //    sets::Group g(b, "Время");
+
+    //    b.Input(kk::ntp_gmt, "Часовой пояс");
+    //    b.Input(kk::ntp_host, "NTP сервер");
+    //    b.LED("synced"_h, "Синхронизирован", NTP.synced());
+    //    b.Label("local_time"_h, "Локальное время", NTP.timeToString());
+    //}
     {
         sets::Group g(b, "WiFi");
+        if (b.Switch(kk::wifi_setup, "WiFi ⚙️")) b.reload();
 
-        b.Switch(kk::show_ip, "Показывать IP");
-        b.Input(kk::wifi_ssid, "SSID");
-        b.Pass(kk::wifi_pass, "Pass", "");
+        if (db[kk::wifi_setup]) {
 
-        if (b.Button("wifi_save"_h, "Подключить")) {
-            Looper.pushEvent("wifi_connect");
+            b.Switch(kk::show_ip, "Показывать IP");
+            b.Input(kk::wifi_ssid, "Название сети Wifi");
+            b.Pass(kk::wifi_pass, "Пароль от Wifi", "");
+
+            if (b.Button("wifi_save"_h, "Подключить")) {
+                Looper.pushEvent("wifi_connect");
+            }
         }
+
+        
     }
 
     if (b.Confirm("ota_update"_h)) {
@@ -125,8 +160,14 @@ LP_LISTENER_("wifi_connect", []() {
 
 LP_TICKER([]() {
     if (Looper.thisSetup()) {
-        LittleFS.begin();
+        LittleFS.begin(true);
         db.begin();
+
+        db.init(kk::fon_setup, false);//переменная фон для меню
+        db.init(kk::time_ntp, false);//Переменная для меню времени
+        db.init(kk::wifi_setup, false);//Переменная меню вайфай
+        db.init(kk::time_rtc_, time_rtc.gettime("H:i:s"));//переменная время rtc
+
 
         db.init(kk::wifi_ssid, "");
         db.init(kk::wifi_pass, "");
@@ -143,6 +184,8 @@ LP_TICKER([]() {
         db.init(kk::adc_max, 1023);
 
         db.init(kk::night_mode, false);
+        
+        
         db.init(kk::night_color, 0xff0000);
         db.init(kk::night_trsh, 50);
 
@@ -169,6 +212,7 @@ LP_TICKER([]() {
     sett.tick();
     ota.tick();
     NTP.tick();
+    db.tick();
 });
 
 LP_TIMER(24ul * 60 * 60 * 1000, []() {
